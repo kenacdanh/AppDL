@@ -1,0 +1,171 @@
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity
+} from "react-native";
+import axios from "axios";
+import io from "socket.io-client";
+import VideoStream from "./VideoStream"; // Đảm bảo đường dẫn đúng nếu VideoStream ở file khác
+
+const Dashboard = () => {
+  const [vehicles, setVehicles] = useState([]); // State lưu dữ liệu xe
+  const socket = io("http://192.168.1.2:5000"); // Đổi IP thành địa chỉ server của bạn
+  const [selectedTab, setSelectedTab] = useState("entry"); // Cổng vào mặc định
+
+  // Lấy danh sách xe khi selectedTab thay đổi
+  useEffect(() => {
+    // Reset vehicles trước khi gọi lại API để tránh dữ liệu cũ
+    setVehicles([]); // Reset dữ liệu mỗi khi tab thay đổi
+
+    fetchVehicles();
+
+    // Lắng nghe cập nhật từ Socket.IO
+    socket.on("vehicle_log_update", () => {
+      fetchVehicles();
+    });
+
+    // Cleanup khi component unmount
+    return () => {
+      socket.disconnect();
+    };
+  }, [selectedTab]); // Đảm bảo gọi lại fetchVehicles khi selectedTab thay đổi
+
+  const fetchVehicles = async () => {
+    try {
+      const response = await axios.get(
+        `http://192.168.1.2:5000/api/vehicles?gate=${selectedTab}` // Lọc theo cổng vào/ra
+      );
+      console.log("Dữ liệu từ server:", response.data); // In dữ liệu nhận được từ API vào terminal
+      setVehicles(response.data); // Cập nhật lại dữ liệu cho vehicles
+    } catch (error) {
+      console.error("Lỗi khi gọi API:", error);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Dashboard</Text>
+      {/* Video Stream */}
+      <VideoStream /> {/* Nhúng VideoStream component ở đây */}
+      {/* Tab Bar */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === "entry" && styles.selectedTab]}
+          onPress={() => setSelectedTab("entry")}
+        >
+          <Text style={styles.tabText}>Cổng Vào</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, selectedTab === "exit" && styles.selectedTab]}
+          onPress={() => setSelectedTab("exit")}
+        >
+          <Text style={styles.tabText}>Cổng Ra</Text>
+        </TouchableOpacity>
+      </View>
+      {/* Table */}
+      <View style={styles.table}>
+        {/* Table Header */}
+        <View style={styles.row}>
+          <Text style={styles.headerCell}>Biển Số</Text>
+          <Text style={styles.headerCell}>Thời Gian Vào</Text>
+          <Text style={styles.headerCell}>Thời Gian Ra</Text>
+          <Text style={styles.headerCell}>Cổng</Text>
+        </View>
+
+        {/* Table Data */}
+        {vehicles.length === 0 ? (
+          <Text style={styles.noDataText}>Không có dữ liệu</Text> // Hiển thị thông báo nếu không có dữ liệu
+        ) : (
+          vehicles.map((item) => {
+            console.log("Item trong vehicles:", item); // In dữ liệu của từng item ra terminal
+            return (
+              <View style={styles.row} key={item.id}>
+                <Text style={styles.cell}>
+                  {item.plate ? item.plate : "---"}
+                </Text>
+                <Text style={styles.cell}>
+                  {item.entry_time ? item.entry_time : "---"}
+                </Text>
+                <Text style={styles.cell}>
+                  {item.exit_time ? item.exit_time : "---"}
+                </Text>
+                <Text style={styles.cell}>{item.gate ? item.gate : "---"}</Text>
+              </View>
+            );
+          })
+        )}
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: "#fff"
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 16,
+    textAlign: "center"
+  },
+  tabContainer: {
+    flexDirection: "row",
+    marginBottom: 16,
+    justifyContent: "center"
+  },
+  tab: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginHorizontal: 8,
+    backgroundColor: "#ddd"
+  },
+  selectedTab: {
+    backgroundColor: "#4CAF50"
+  },
+  tabText: {
+    fontSize: 18,
+    color: "#fff"
+  },
+  table: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8
+  },
+  row: {
+    flexDirection: "row",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: "#ccc",
+    alignItems: "center"
+  },
+  headerCell: {
+    flex: 1,
+    fontWeight: "bold",
+    textAlign: "center",
+    fontSize: 16,
+    paddingHorizontal: 8
+  },
+  cell: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 16,
+    paddingHorizontal: 8
+  },
+  noDataText: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 16,
+    color: "gray",
+    padding: 16
+  }
+});
+
+export default Dashboard;
